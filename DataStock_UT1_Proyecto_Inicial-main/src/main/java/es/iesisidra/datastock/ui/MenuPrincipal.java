@@ -40,7 +40,10 @@ public class MenuPrincipal {
                     ExploradorFicheros.explorarRuta(ruta);
                     break;
                 case 2:
-                    pendiente("RF-FIC-02 · Importar productos desde JSON");
+                    System.out.println("Introduce la ruta del JSON: ");
+                    String rutaJson = LectorConsola.leerTexto("Introduce la ruta");
+                    inventario.importarDesdeJson(rutaJson);
+                    LectorConsola.pausar();
                 case 3:
                     pendiente("RF-FIC-03 · Importar productos desde XML");
                 case 4:

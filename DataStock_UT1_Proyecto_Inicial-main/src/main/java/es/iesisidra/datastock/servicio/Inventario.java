@@ -1,22 +1,113 @@
 package es.iesisidra.datastock.servicio;
 
-import es.iesisidra.datastock.modelo.Producto;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+
+import es.iesisidra.datastock.modelo.Producto;
+
 /**
  * Estado común del inventario durante la ejecución de UT1.
- * <p>Esta clase solo proporciona la colección compartida. No implementa
- * importación, validación, búsqueda, exportación ni persistencia: esos son
- * ejercicios que deberá desarrollar el alumnado.</p>
  */
 public class Inventario {
     private final List<Producto> productos = new ArrayList<>();
 
+    public List<Producto> getProductos() { 
+        return productos; 
+    }
+
+    // Clase auxiliar interna para Gson (correctamente aislada)
+    private static class ContenedorJson {
+        private List<Producto> productos;
+        public List<Producto> getProductos() { 
+            return productos; 
+        }
+    }
+
     /**
-     * Obtiene la colección que comparten las opciones del menú.
-     * <p>ATENCIÓN: la lista es modificable. El alumnado deberá aplicar las
-     * reglas del enunciado antes de añadir o sustituir elementos.</p>
+     * Importa productos desde un fichero JSON cumpliendo las reglas de la UT1.
      */
-    public List<Producto> getProductos() { return productos; }
+    public void importarDesdeJson(String rutaFichero) {
+        Path ruta = Paths.get(rutaFichero);
+
+        if (!Files.exists(ruta) || !Files.isRegularFile(ruta)) {
+            System.out.println("Error: El fichero no existe o no es un fichero válido.");
+            return;
+        }
+
+        Gson gson = new Gson();
+        ContenedorJson contenedor;
+
+        try (BufferedReader reader = Files.newBufferedReader(ruta)) {
+            contenedor = gson.fromJson(reader, ContenedorJson.class);
+            if (contenedor == null || contenedor.getProductos() == null) {
+                System.out.println("Error: El fichero JSON no tiene la estructura correcta (falta la clave 'productos').");
+                return;
+            }
+        } catch (JsonSyntaxException e) {
+            System.out.println("Error: El fichero JSON está mal formado y no se puede interpretar[cite: 16].");
+            return;
+        } catch (IOException e) {
+            System.out.println("Error de E/S al leer el fichero: " + e.getMessage());
+            return;
+        }
+
+        int encontrados = contenedor.getProductos().size();
+        int importados = 0;
+        int rechazados = 0;
+        StringBuilder incidencias = new StringBuilder();
+
+        for (Producto p : contenedor.getProductos()) {
+            String codigo = p.getCodigo() != null ? p.getCodigo().trim() : "";
+            
+            boolean esValido = true;
+            String motivo = "";
+
+            if (codigo.isEmpty() || codigo.length() > 12) {
+                esValido = false;
+                motivo = "el código es obligatorio y máximo de 12 caracteres";
+            } else if (p.getNombre() == null || p.getNombre().trim().length() < 3 || p.getNombre().length() > 100) {
+                esValido = false;
+                motivo = "el nombre debe tener entre 3 y 100 caracteres";
+            } else if (p.getPrecio() == null || p.getPrecio().signum() <= 0) {
+                esValido = false;
+                motivo = "el precio debe ser mayor que 0";
+            } else if (p.getStock() < 0) {
+                esValido = false;
+                motivo = "el stock no puede ser negativo";
+            } else {
+                boolean duplicado = productos.stream()
+                        .anyMatch(existing -> existing.getCodigo().equalsIgnoreCase(codigo));
+                if (duplicado) {
+                    esValido = false;
+                    motivo = "código duplicado";
+                }
+            }
+
+            if (esValido) {
+                p.setCodigo(codigo);
+                productos.add(p);
+                importados++;
+            } else {
+                rechazados++;
+                incidencias.append(" - Producto ").append(codigo.isEmpty() ? "desconocido" : codigo)
+                           .append(": ").append(motivo).append("\n");
+            }
+        }
+
+        System.out.println("\n===== IMPORTAR JSON =====");
+        System.out.println("Productos encontrados: " + encontrados);
+        System.out.println("Importados: " + importados + " | Rechazados: " + rechazados);
+        if (rechazados > 0) {
+            System.out.println("INCIDENCIAS:\n" + incidencias.toString());
+        }
+        System.out.println("Importación finalizada.");
+    }
 }
