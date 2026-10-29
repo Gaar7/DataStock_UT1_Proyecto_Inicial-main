@@ -1,5 +1,10 @@
 package es.iesisidra.datastock.ui;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+import es.iesisidra.datastock.modelo.Producto;
 import es.iesisidra.datastock.servicio.Inventario;
 import es.iesisidra.datastock.util.ColoresConsola;
 import es.iesisidra.datastock.util.LectorConsola;
@@ -77,59 +82,231 @@ public class MenuPrincipal {
                 ColoresConsola.GRIS));
     }
 
+    private void mostrarProducto(es.iesisidra.datastock.modelo.Producto p) {
+        System.out.println("--------------------------------");
+        System.out.println("Código: " + p.getCodigo());
+        System.out.println("Nombre: " + p.getNombre());
+        System.out.println("Precio: " + p.getPrecio() + " €");
+        System.out.println("Stock: " + p.getStock());
+        System.out.println("Categoría: " + p.getCategoriaId());
+        System.out.println("Proveedor: " + p.getProveedorId());
+    }
+
     private void menuConsultas() {
         int opcion;
+
         do {
             System.out.println("\n---------- CONSULTA DE PRODUCTOS ----------");
             System.out.println("1. Listar todos los productos");
             System.out.println("2. Buscar producto por código");
             System.out.println("3. Buscar productos por nombre");
             System.out.println("0. Volver al menú principal");
-            opcion = LectorConsola.leerOpcion("Selecciona una opción: ", 0, 3);
+
+            opcion = LectorConsola.leerOpcion(
+                    "Selecciona una opción: ", 0, 3);
+
             switch (opcion) {
-                case 1 -> pendiente("RF-FIC-04 · Listar productos");
-                case 2 -> pendiente("RF-FIC-04 · Buscar por código");
-                case 3 -> pendiente("RF-FIC-04 · Buscar por nombre");
-                case 0 -> {
+                case 1 -> {
+                    if (inventario.getProductos().isEmpty()) {
+                        System.out.println("No hay productos en el inventario.");
+                    } else {
+                        System.out.println("\n===== LISTADO DE PRODUCTOS =====");
+
+                        for (Producto p : inventario.obtenerProductosOrdenados()) {
+                            mostrarProducto(p);
+                        }
+                    }
                 }
-                default -> throw new IllegalStateException("Opción inesperada");
+
+                case 2 -> {
+                    String codigo = LectorConsola.leerTexto(
+                            "Introduce el código del producto: ");
+
+                    Producto p = inventario.buscarPorCodigo(codigo);
+
+                    if (p != null) {
+                        System.out.println("\n===== PRODUCTO ENCONTRADO =====");
+                        mostrarProducto(p);
+                    } else {
+                        System.out.println("No existe ningún producto con ese código.");
+                    }
+                }
+
+                case 3 -> {
+                    String nombre = LectorConsola.leerTexto(
+                            "Introduce el texto a buscar en el nombre: ");
+
+                    if (nombre.trim().isEmpty()) {
+                        System.out.println("Debes introducir un texto para buscar.");
+                    } else {
+                        var encontrados = inventario.buscarPorNombre(nombre);
+
+                        if (encontrados.isEmpty()) {
+                            System.out.println("No se encontraron productos.");
+                        } else {
+                            System.out.println("\n===== PRODUCTOS ENCONTRADOS =====");
+
+                            for (Producto p : encontrados) {
+                                mostrarProducto(p);
+                            }
+
+                            System.out.println("Total encontrados: "
+                                    + encontrados.size());
+                        }
+                    }
+                }
+
+                case 0 -> {
+                    System.out.println("Volviendo al menú principal...");
+                }
             }
+
         } while (opcion != 0);
     }
 
     private void menuExportaciones() {
         int opcion;
+
         do {
             System.out.println("\n---------- EXPORTAR PRODUCTOS ----------");
             System.out.println("1. Exportar productos a JSON");
             System.out.println("2. Exportar productos a XML");
             System.out.println("0. Volver al menú principal");
-            opcion = LectorConsola.leerOpcion("Selecciona una opción: ", 0, 2);
+
+            opcion = LectorConsola.leerOpcion(
+                    "Selecciona una opción: ", 0, 2);
+
             switch (opcion) {
-                case 1 -> pendiente("RF-FIC-05 · Exportar JSON");
-                case 2 -> pendiente("RF-FIC-05 · Exportar XML");
-                case 0 -> {
-                }
-                default -> throw new IllegalStateException("Opción inesperada");
+                case 1 -> gestionarExportacion(true);
+                case 2 -> gestionarExportacion(false);
+                case 0 -> System.out.println("Volviendo al menú principal...");
             }
+
+            if (opcion != 0) {
+                LectorConsola.pausar();
+            }
+
         } while (opcion != 0);
+    }
+
+    /**
+     * Solicita la ruta y gestiona la exportación elegida.
+     * 
+     * @param json true para JSON y false para XML.
+     */
+    private void gestionarExportacion(boolean json) {
+        if (inventario.getProductos().isEmpty()) {
+            System.out.println("No hay productos para exportar.");
+        } else {
+            String formato = json ? "JSON" : "XML";
+
+            String rutaTexto = LectorConsola.leerTexto(
+                    "Introduce la ruta de destino del " + formato + ": ");
+
+            try {
+                Path ruta = Paths.get(rutaTexto);
+
+                boolean sobrescribir = false;
+
+                if (Files.exists(ruta)) {
+                    sobrescribir = LectorConsola.confirmar(
+                            "El fichero ya existe. ¿Deseas sobrescribirlo?");
+                }
+
+                if (!Files.exists(ruta) || sobrescribir) {
+                    if (json) {
+                        inventario.exportarAJson(rutaTexto, sobrescribir);
+                    } else {
+                        inventario.exportarAXml(rutaTexto, sobrescribir);
+                    }
+                } else {
+                    System.out.println("Exportación cancelada.");
+                }
+
+            } catch (Exception e) {
+                System.out.println("Error en la ruta de destino: "
+                        + e.getMessage());
+            }
+        }
+    }
+
+    private void gestionarGuardado() {
+        String ruta = LectorConsola.leerTexto(
+                "Introduce la ruta del fichero .dat: ");
+
+        try {
+            Path destino = Paths.get(ruta);
+
+            boolean sobrescribir = false;
+
+            if (Files.exists(destino)) {
+                sobrescribir = LectorConsola.confirmar(
+                        "El fichero ya existe. ¿Deseas sobrescribirlo?");
+            }
+
+            if (!Files.exists(destino) || sobrescribir) {
+                inventario.guardarInventario(ruta);
+            } else {
+                System.out.println("Guardado cancelado.");
+            }
+
+        } catch (Exception e) {
+            System.out.println("Error en la ruta: " + e.getMessage());
+        }
+    }
+
+    private void gestionarRecuperacion() {
+        if (inventario.getProductos().isEmpty()) {
+            recuperarDesdeFichero();
+        } else {
+            boolean confirmar = LectorConsola.confirmar(
+                    "Se sustituirá el inventario actual. ¿Continuar?");
+
+            if (confirmar) {
+                recuperarDesdeFichero();
+            } else {
+                System.out.println("Recuperación cancelada.");
+            }
+        }
+    }
+
+    private void recuperarDesdeFichero() {
+        String ruta = LectorConsola.leerTexto(
+                "Introduce la ruta del fichero .dat: ");
+
+        try {
+            inventario.recuperarInventario(ruta);
+        } catch (Exception e) {
+            System.out.println("Error en la ruta: " + e.getMessage());
+        }
     }
 
     private void menuSerializacion() {
         int opcion;
+
         do {
-            System.out.println("\n---------- GUARDAR Y RECUPERAR INVENTARIO ----------");
+            System.out.println("----------------------------------------------");
+            System.out.println("GUARDAR Y RECUPERAR INVENTARIO");
+            System.out.println("----------------------------------------------");
             System.out.println("1. Guardar inventario en fichero .dat");
             System.out.println("2. Recuperar inventario desde fichero .dat");
             System.out.println("0. Volver al menú principal");
-            opcion = LectorConsola.leerOpcion("Selecciona una opción: ", 0, 2);
+            System.out.println("----------------------------------------------");
+
+            opcion = LectorConsola.leerOpcion(
+                    "Selecciona una opción: ", 0, 2);
+
             switch (opcion) {
-                case 1 -> pendiente("RF-FIC-06 · Guardar inventario");
-                case 2 -> pendiente("RF-FIC-06 · Recuperar inventario");
-                case 0 -> {
-                }
-                default -> throw new IllegalStateException("Opción inesperada");
+                case 1 -> gestionarGuardado();
+                case 2 -> gestionarRecuperacion();
+                case 0 -> System.out.println(
+                        "Volviendo al menú principal...");
             }
+
+            if (opcion != 0) {
+                LectorConsola.pausar();
+            }
+
         } while (opcion != 0);
     }
 

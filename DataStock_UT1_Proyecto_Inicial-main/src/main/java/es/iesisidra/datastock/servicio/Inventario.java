@@ -1,24 +1,39 @@
 package es.iesisidra.datastock.servicio;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 
 import es.iesisidra.datastock.modelo.Producto;
@@ -41,6 +56,156 @@ public class Inventario {
 
         public List<Producto> getProductos() {
             return productos;
+        }
+    }
+
+    public void guardarInventario(String rutaFichero) {
+        Path ruta = Paths.get(rutaFichero);
+
+        if (productos.isEmpty()) {
+            System.out.println("No hay productos para guardar.");
+        } else if (Files.exists(ruta) && !Files.isRegularFile(ruta)) {
+            System.out.println("La ruta no es un fichero válido.");
+        } else {
+            try (ObjectOutputStream salida = new ObjectOutputStream(
+                    new FileOutputStream(ruta.toFile()))) {
+
+                salida.writeObject(new ArrayList<>(productos));
+
+                System.out.println("Inventario guardado correctamente.");
+
+            } catch (IOException e) {
+                System.out.println("Error al guardar: " + e.getMessage());
+            }
+        }
+    }
+
+    public void recuperarInventario(String rutaFichero) {
+        Path ruta = Paths.get(rutaFichero);
+
+        if (!Files.isRegularFile(ruta)) {
+            System.out.println("El fichero no existe o no es válido.");
+        } else {
+            try (ObjectInputStream entrada = new ObjectInputStream(
+                    new FileInputStream(ruta.toFile()))) {
+
+                Object objeto = entrada.readObject();
+
+                if (objeto instanceof List<?>) {
+                    List<?> listaLeida = (List<?>) objeto;
+                    List<Producto> productosRecuperados = new ArrayList<>();
+
+                    boolean listaValida = true;
+
+                    for (Object elemento : listaLeida) {
+                        if (elemento instanceof Producto) {
+                            productosRecuperados.add((Producto) elemento);
+                        } else {
+                            listaValida = false;
+                        }
+                    }
+
+                    if (listaValida) {
+                        productos.clear();
+                        productos.addAll(productosRecuperados);
+
+                        System.out.println(
+                                "Inventario recuperado correctamente. Productos: "
+                                        + productos.size());
+                    } else {
+                        System.out.println(
+                                "El fichero contiene datos que no son productos.");
+                    }
+                } else {
+                    System.out.println(
+                            "El fichero no contiene una lista de productos.");
+                }
+
+            } catch (IOException | ClassNotFoundException e) {
+                System.out.println(
+                        "Error al recuperar el inventario: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Exporta los productos del inventario a un fichero XML.
+     */
+    public void exportarAXml(String rutaFichero, boolean sobrescribir) {
+        if (productos.isEmpty()) {
+            System.out.println("No hay productos para exportar.");
+        } else {
+            Path ruta = Paths.get(rutaFichero);
+
+            if (Files.exists(ruta) && !sobrescribir) {
+                System.out.println("Exportación cancelada.");
+            } else if (Files.exists(ruta) && !Files.isRegularFile(ruta)) {
+                System.out.println("Error: La ruta no es un fichero válido.");
+            } else {
+                try {
+                    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+
+                    DocumentBuilder builder = factory.newDocumentBuilder();
+                    Document documento = builder.newDocument();
+
+                    Element raiz = documento.createElement("catalogo");
+                    documento.appendChild(raiz);
+
+                    for (Producto p : productos) {
+                        Element elementoProducto = documento.createElement("producto");
+
+                        raiz.appendChild(elementoProducto);
+
+                        Element codigo = documento.createElement("codigo");
+                        codigo.setTextContent(p.getCodigo());
+                        elementoProducto.appendChild(codigo);
+
+                        Element nombre = documento.createElement("nombre");
+                        nombre.setTextContent(p.getNombre());
+                        elementoProducto.appendChild(nombre);
+
+                        Element precio = documento.createElement("precio");
+                        precio.setTextContent(p.getPrecio().toString());
+                        elementoProducto.appendChild(precio);
+
+                        Element stock = documento.createElement("stock");
+                        stock.setTextContent(String.valueOf(p.getStock()));
+                        elementoProducto.appendChild(stock);
+
+                        Element categoriaId = documento.createElement("categoriaId");
+                        categoriaId.setTextContent(
+                                String.valueOf(p.getCategoriaId()));
+                        elementoProducto.appendChild(categoriaId);
+
+                        Element proveedorId = documento.createElement("proveedorId");
+                        proveedorId.setTextContent(
+                                String.valueOf(p.getProveedorId()));
+                        elementoProducto.appendChild(proveedorId);
+                    }
+
+                    TransformerFactory transformerFactory = TransformerFactory.newInstance();
+
+                    Transformer transformer = transformerFactory.newTransformer();
+
+                    transformer.setOutputProperty(
+                            OutputKeys.INDENT, "yes");
+
+                    transformer.setOutputProperty(
+                            OutputKeys.ENCODING, "UTF-8");
+
+                    DOMSource origen = new DOMSource(documento);
+                    StreamResult destino = new StreamResult(ruta.toFile());
+
+                    transformer.transform(origen, destino);
+
+                    System.out.println(
+                            "Exportación XML realizada correctamente.");
+
+                } catch (Exception e) {
+                    System.out.println(
+                            "Error al exportar XML: " + e.getMessage());
+                }
+            }
         }
     }
 
@@ -270,6 +435,92 @@ public class Inventario {
         }
 
         System.out.println("Importación finalizada.");
+    }
+
+    /**
+     * Devuelve una copia de los productos ordenada por código.
+     */
+    public List<Producto> obtenerProductosOrdenados() {
+        List<Producto> ordenados = new ArrayList<>(productos);
+
+        ordenados.sort(
+                Comparator.comparing(
+                        Producto::getCodigo,
+                        String.CASE_INSENSITIVE_ORDER));
+
+        return ordenados;
+    }
+
+    /**
+     * Busca un producto por su código.
+     */
+    public Producto buscarPorCodigo(String codigo) {
+        Producto encontrado = null;
+
+        for (Producto p : productos) {
+            if (p.getCodigo() != null
+                    && p.getCodigo().trim()
+                            .equalsIgnoreCase(codigo.trim())) {
+                encontrado = p;
+            }
+        }
+
+        return encontrado;
+    }
+
+    /**
+     * Busca productos cuyo nombre contenga el texto indicado.
+     */
+    public List<Producto> buscarPorNombre(String texto) {
+        List<Producto> encontrados = new ArrayList<>();
+
+        String textoBuscado = texto.trim().toLowerCase(Locale.ROOT);
+
+        for (Producto p : productos) {
+            if (p.getNombre() != null
+                    && p.getNombre().toLowerCase(Locale.ROOT)
+                            .contains(textoBuscado)) {
+                encontrados.add(p);
+            }
+        }
+
+        return encontrados;
+    }
+
+    /**
+     * Exporta los productos del inventario a un fichero JSON.
+     */
+    public void exportarAJson(String rutaFichero, boolean sobrescribir) {
+        if (productos.isEmpty()) {
+            System.out.println("No hay productos para exportar.");
+        } else {
+            Path ruta = Paths.get(rutaFichero);
+
+            if (Files.exists(ruta) && !sobrescribir) {
+                System.out.println("Exportación cancelada.");
+            } else if (Files.exists(ruta) && !Files.isRegularFile(ruta)) {
+                System.out.println("Error: La ruta no es un fichero válido.");
+            } else {
+                Gson gson = new GsonBuilder()
+                        .setPrettyPrinting()
+                        .create();
+
+                Map<String, List<Producto>> contenedor = Map.of("productos", productos);
+
+                try (BufferedWriter writer = Files.newBufferedWriter(
+                        ruta,
+                        StandardOpenOption.CREATE,
+                        StandardOpenOption.TRUNCATE_EXISTING,
+                        StandardOpenOption.WRITE)) {
+
+                    gson.toJson(contenedor, writer);
+                    System.out.println("Exportación JSON realizada correctamente.");
+
+                } catch (IOException e) {
+                    System.out.println("Error al exportar JSON: " + e.getMessage());
+                }
+            }
+        }
     }
 
 }
