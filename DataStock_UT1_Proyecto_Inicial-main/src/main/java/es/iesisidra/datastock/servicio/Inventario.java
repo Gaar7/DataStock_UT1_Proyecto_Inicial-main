@@ -41,14 +41,34 @@ import es.iesisidra.datastock.modelo.Producto;
 /**
  * Estado común del inventario durante la ejecución de UT1.
  */
+/**
+ * Esta clase se encarga de gestionar el inventario durante la ejecución.
+ * Mantiene la lista común de productos y ofrece los métodos para importar,
+ * consultar, exportar, guardar y recuperar esos productos.
+ *
+ * Se relaciona con Producto porque la lista almacena objetos de esa clase.
+ * MenuPrincipal utiliza los métodos públicos de Inventario cuando el usuario
+ * elige una opción en los menús.
+ */
 public class Inventario {
 
+    // Lista que contiene los productos cargados en memoria.
+    // Es final para que la referencia a la lista no se sustituya, aunque
+    // sí podemos añadir, eliminar o consultar sus elementos.
     private final List<Producto> productos = new ArrayList<>();
 
+    /**
+     * Devuelve la lista de productos del inventario.
+     * MenuPrincipal la utiliza, por ejemplo, para mostrar cuántos productos hay
+     * y para comprobar si el inventario está vacío.
+     */
     public List<Producto> getProductos() {
         return productos;
     }
 
+    // Clase auxiliar que representa la estructura del JSON de entrada.
+    // El fichero espera un objeto principal con una propiedad llamada
+    // "productos", que contiene la lista de artículos.
     // Clase auxiliar interna para Gson (correctamente aislada)
     private static class ContenedorJson {
 
@@ -59,6 +79,13 @@ public class Inventario {
         }
     }
 
+    /**
+     * Guarda el inventario en un fichero binario mediante serialización Java.
+     * Recibe la ruta del fichero .dat desde MenuPrincipal.
+     *
+     * Comprueba que haya productos y que la ruta no apunte a un directorio.
+     * ObjectOutputStream escribe una copia de la lista en el fichero.
+     */
     public void guardarInventario(String rutaFichero) {
         Path ruta = Paths.get(rutaFichero);
 
@@ -78,8 +105,18 @@ public class Inventario {
                 System.out.println("Error al guardar: " + e.getMessage());
             }
         }
+
     }
 
+    /**
+     * Recupera una lista de productos desde un fichero serializado.
+     * Primero comprueba que la ruta sea un fichero válido y después lee
+     * el objeto guardado con ObjectInputStream.
+     *
+     * Antes de sustituir el inventario actual, comprueba que el objeto leído
+     * sea una lista y que todos sus elementos sean Producto. Así evita dejar
+     * el inventario a medio sustituir si el contenido no es válido.
+     */
     public void recuperarInventario(String rutaFichero) {
         Path ruta = Paths.get(rutaFichero);
 
@@ -129,7 +166,13 @@ public class Inventario {
     }
 
     /**
-     * Exporta los productos del inventario a un fichero XML.
+     * Recupera una lista de productos desde un fichero serializado.
+     * Primero comprueba que la ruta sea un fichero válido y después lee
+     * el objeto guardado con ObjectInputStream.
+     *
+     * Antes de sustituir el inventario actual, comprueba que el objeto leído
+     * sea una lista y que todos sus elementos sean Producto. Así evita dejar
+     * el inventario a medio sustituir si el contenido no es válido.
      */
     public void exportarAXml(String rutaFichero, boolean sobrescribir) {
         if (productos.isEmpty()) {
@@ -183,6 +226,8 @@ public class Inventario {
                         elementoProducto.appendChild(proveedorId);
                     }
 
+                    // Transformer convierte el documento DOM en texto XML y lo escribe en el
+                    // fichero.
                     TransformerFactory transformerFactory = TransformerFactory.newInstance();
 
                     Transformer transformer = transformerFactory.newTransformer();
@@ -210,7 +255,15 @@ public class Inventario {
     }
 
     /**
-     * Importa productos desde un fichero JSON cumpliendo las reglas de la UT1.
+     * Exporta los productos del inventario a un fichero XML utilizando DOM.
+     * Construye un documento en memoria con un nodo raíz "catalogo" y un nodo
+     * "producto" por cada artículo, con sus campos como elementos hijos.
+     *
+     * El parámetro sobrescribir indica si el usuario ha autorizado reemplazar
+     * un fichero que ya existe. MenuPrincipal solicita esa confirmación.
+     */
+    /**
+     * Exporta los productos del inventario a un fichero XML.
      */
     public void importarDesdeJson(String rutaFichero) {
         Path ruta = Paths.get(rutaFichero);
@@ -219,7 +272,7 @@ public class Inventario {
             System.out.println("Error: El fichero no existe o no es un fichero válido.");
             return;
         }
-
+        // Gson se encarga de transformar el contenido JSON en objetos Java.
         Gson gson = new Gson();
         ContenedorJson contenedor;
 
@@ -237,12 +290,14 @@ public class Inventario {
             System.out.println("Error de E/S al leer el fichero: " + e.getMessage());
             return;
         }
-
+        // Contadores para elaborar el resumen que se muestra al terminar la
+        // importación.
         int encontrados = contenedor.getProductos().size();
         int importados = 0;
         int rechazados = 0;
         StringBuilder incidencias = new StringBuilder();
 
+        // Se procesa cada producto del fichero por separado.
         for (Producto p : contenedor.getProductos()) {
             String codigo = p.getCodigo() != null ? p.getCodigo().trim() : "";
 
@@ -263,6 +318,7 @@ public class Inventario {
                 motivo = "el stock no puede ser negativo";
             } else {
 
+                // Comprueba si el código ya aparece en el inventario actual.
                 boolean duplicado = false;
 
                 for (Producto existente : productos) {
@@ -296,6 +352,10 @@ public class Inventario {
     }
 
     /*
+     * Estas líneas describían inicialmente las tareas previstas para la
+     * importación XML. La implementación completa aparece en el método siguiente.
+     */
+    /*
      * Método importarDesdeXml que:
      * - Compruebe que el fichero existe
      * - Lo lea mediante DOM
@@ -307,6 +367,14 @@ public class Inventario {
 
     /**
      * Importa productos desde un fichero XML utilizando DOM.
+     */
+    /**
+     * Importa productos desde un fichero XML mediante DOM.
+     * DOM carga el documento XML como una estructura de nodos que podemos
+     * recorrer para obtener los campos de cada producto.
+     *
+     * Cada producto se convierte en un objeto Producto, se validan sus datos
+     * y, si es correcto, se añade a la lista del inventario.
      */
     public void importarDesdeXml(String rutaFichero) {
         File fichero = new File(rutaFichero);
@@ -339,6 +407,7 @@ public class Inventario {
             return;
         }
 
+        // Obtiene todos los elementos llamados 'producto' que cuelgan del nodo raíz.
         NodeList listaProductos = documento.getDocumentElement()
                 .getElementsByTagName("producto");
 
@@ -348,6 +417,7 @@ public class Inventario {
 
         StringBuilder incidencias = new StringBuilder();
 
+        // Recorre los nodos de producto encontrados en el documento XML.
         for (int i = 0; i < encontrados; i++) {
             Element elemento = (Element) listaProductos.item(i);
 
@@ -439,6 +509,11 @@ public class Inventario {
 
     /**
      * Devuelve una copia de los productos ordenada por código.
+     * Se crea una lista nueva para ordenar sin cambiar el orden de la lista
+     * original del inventario.
+     */
+    /**
+     * Devuelve una copia de los productos ordenada por código.
      */
     public List<Producto> obtenerProductosOrdenados() {
         List<Producto> ordenados = new ArrayList<>(productos);
@@ -451,6 +526,11 @@ public class Inventario {
         return ordenados;
     }
 
+    /**
+     * Busca un producto por su código, sin distinguir mayúsculas y minúsculas.
+     * Recorre la lista y compara los códigos después de quitar espacios
+     * exteriores. Devuelve el producto encontrado o null si no existe.
+     */
     /**
      * Busca un producto por su código.
      */
@@ -468,6 +548,11 @@ public class Inventario {
         return encontrado;
     }
 
+    /**
+     * Busca productos cuyo nombre contenga el texto indicado.
+     * La comparación no distingue mayúsculas y minúsculas. Los resultados se
+     * guardan en una lista nueva, por lo que no se modifica el inventario.
+     */
     /**
      * Busca productos cuyo nombre contenga el texto indicado.
      */
@@ -488,6 +573,14 @@ public class Inventario {
     }
 
     /**
+     * Exporta el inventario a un fichero JSON usando Gson.
+     * Se crea un objeto contenedor con la propiedad "productos" para que el
+     * resultado tenga la misma estructura que espera el importador JSON.
+     *
+     * El parámetro sobrescribir indica si se permite reemplazar un fichero
+     * existente; la confirmación se solicita previamente desde MenuPrincipal.
+     */
+    /**
      * Exporta los productos del inventario a un fichero JSON.
      */
     public void exportarAJson(String rutaFichero, boolean sobrescribir) {
@@ -504,7 +597,7 @@ public class Inventario {
                 Gson gson = new GsonBuilder()
                         .setPrettyPrinting()
                         .create();
-
+                // Crea la estructura {"productos": [...]} que se guardará en el JSON.
                 Map<String, List<Producto>> contenedor = Map.of("productos", productos);
 
                 try (BufferedWriter writer = Files.newBufferedWriter(
